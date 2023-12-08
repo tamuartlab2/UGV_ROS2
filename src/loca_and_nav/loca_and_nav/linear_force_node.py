@@ -24,7 +24,7 @@ auto_mode_subscript_topic = 'auto_mode'
 enable_obstacle_force_topic = 'force/enable_obstacle_force'
 publish_rate = 10.0		#Hz
 # F_linear_fix = 0.8
-F_linear_fix = 1.2      #linear leading force
+F_linear_fix = 0.95      #linear leading force
 goal_tolerance = 0.3        #m
 
 # set original point of the global coordinate, this should be identical for all robots and should be close to the start point of the robot (within 500 m)

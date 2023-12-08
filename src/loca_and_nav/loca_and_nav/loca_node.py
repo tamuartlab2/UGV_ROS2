@@ -221,35 +221,47 @@ class Localization(Node):
                 self.pos_init_status = True
                 print('The initial position was updated by the GPS successfully.')
         elif self.angle_init_status == True:
-            # Update GPS LKF here
-            H = np. matrix([[1, 0, 0, 0],
-                            [0, 1, 0, 0]])
-            R = np. matrix([[msg.position_covariance[0], 0],
-                            [0, msg.position_covariance[4]]])
-            # R = np. matrix([[6.25, 0],
-            #                 [0, 6.25]])
-            y = np. matrix([[(msg.longitude - lon_0)*lon_to_m],
-                            [(msg.latitude - lat_0)*lat_to_m]])
-            y_tilde = y - H*self.x_k
-            S = H * self.P_k * H.T + R
-            K = self.P_k * H.T * S.I
+            if msg.latitude != 0.0 or msg.longitude != 0.0:
+                # Update GPS LKF here
+                H = np. matrix([[1, 0, 0, 0],
+                                [0, 1, 0, 0]])
+                R = np. matrix([[msg.position_covariance[0], 0],
+                                [0, msg.position_covariance[4]]])
+                # R = np. matrix([[6.25, 0],
+                #                 [0, 6.25]])
+                y = np. matrix([[(msg.longitude - lon_0)*lon_to_m],
+                                [(msg.latitude - lat_0)*lat_to_m]])
+                y_tilde = y - H*self.x_k
+                S = H * self.P_k * H.T + R
+                K = self.P_k * H.T * S.I
 
-            self.x_k += K*y_tilde
-            self.P_k = (np.eye(4) - K*H)*self.P_k   
+                self.x_k += K*y_tilde
+                self.P_k = (np.eye(4) - K*H)*self.P_k   
 
     def gps2_update(self, msg):   
-        H = np. matrix([[1, 0, 0, 0],
-                        [0, 1, 0, 0]])
-        R = np. matrix([[msg.position_covariance[0], 0],
-                        [0, msg.position_covariance[4]]])
-        y = np. matrix([[(msg.longitude - lon_0)*lon_to_m],
-                        [(msg.latitude - lat_0)*lat_to_m]])
-        y_tilde = y - H*self.x_k
-        S = H * self.P_k * H.T + R
-        K = self.P_k * H.T * S.I
+        if self.pos_init_status == False:
+            if msg.latitude != 0.0 or msg.longitude != 0.0:
+                self.x_k[0, 0] = (msg.longitude - lon_0)*lon_to_m
+                self.x_k[1, 0] = (msg.latitude - lat_0)*lat_to_m
+                self.P_k[0, 0] = msg.position_covariance[0]
+                self.P_k[1, 1] = msg.position_covariance[4]
+                self.pos_init_status = True
+                print('The initial position was updated by the GPS successfully.')
+        elif self.angle_init_status == True:
+            if msg.latitude != 0.0 or msg.longitude != 0.0:
+                # Update GPS LKF here
+                H = np. matrix([[1, 0, 0, 0],
+                                [0, 1, 0, 0]])
+                R = np. matrix([[msg.position_covariance[0], 0],
+                                [0, msg.position_covariance[4]]])
+                y = np. matrix([[(msg.longitude - lon_0)*lon_to_m],
+                                [(msg.latitude - lat_0)*lat_to_m]])
+                y_tilde = y - H*self.x_k
+                S = H * self.P_k * H.T + R
+                K = self.P_k * H.T * S.I
 
-        self.x_k += K*y_tilde
-        self.P_k = (np.eye(4) - K*H)*self.P_k
+                self.x_k += K*y_tilde
+                self.P_k = (np.eye(4) - K*H)*self.P_k   
 
     def wrapToPi(self, angle):
         # takes an angle as input and calculates its equivalent value within the range of -pi (exclusive) to pi 

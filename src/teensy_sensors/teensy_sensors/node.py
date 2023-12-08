@@ -16,7 +16,7 @@ gyro_correct_cov = 5.0238538949e-4
 accel_incorrect_cov = 10.0
 accel_correct_cov = 6.0952
 
-teensySerial.write(b'\x04')
+teensySerial.write(b'\x04')     #Calibrate IMU cmd
 
 class IMUGPS(Node):
     def __init__(self):

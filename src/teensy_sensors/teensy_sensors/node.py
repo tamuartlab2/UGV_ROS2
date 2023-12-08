@@ -16,6 +16,8 @@ gyro_correct_cov = 5.0238538949e-4
 accel_incorrect_cov = 10.0
 accel_correct_cov = 6.0952
 
+teensySerial.write(b'\x04')
+
 class IMUGPS(Node):
     def __init__(self):
         super().__init__('IMU_GPS') #namespace="R1")   #node name, namespace

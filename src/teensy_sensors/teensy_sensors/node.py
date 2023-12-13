@@ -64,7 +64,7 @@ class IMUGPS(Node):
                 imuMsg.linear_acceleration.y, = struct.unpack('f', teensySerial.read(4))
                 imuMsg.linear_acceleration.z, = struct.unpack('f', teensySerial.read(4))
                 Compass.data, = struct.unpack('f', teensySerial.read(4))
-                if imuMsg.orientation.x + imuMsg.orientation.y + imuMsg.orientation.z + imuMsg.orientation.w == 0:
+                if imuMsg.orientation.x == 0.0 and imuMsg.orientation.y == 0.0 and imuMsg.orientation.z == 0.0 and imuMsg.orientation.w == 0.0:
                     self.get_logger().info('BNO055 is dead.')
                 else:
                     Compass.data += 90

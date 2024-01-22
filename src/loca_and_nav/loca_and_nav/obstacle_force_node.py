@@ -4,6 +4,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist, Vector3Stamped 
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, Image
+from std_msgs.msg import Float64MultiArray
 
 # from std_msgs.msg import String, Bool, Float64, Int8
 # from sensor_msgs.msg import NavSatFix, Imu
@@ -20,16 +21,17 @@ from sensor_msgs.msg import LaserScan, Image
 F_obstacle_pub_topic = 'force/obstacle'
 lidar_scan_subscript_topic = 'scan'
 depth_subscript_topic = "camera/aligned_depth_to_color/image_raw"
+parameter_subscript_topic = 'loca_and_nav/parameters'
 enable_camera = True
 publish_rate = 10.0		#Hz
-K_e = 0.8              #K_e = k * rou * q'
-lidar_effective_distance = 1.5        #m
-camera_effective_distance = 0.5         #m
+K_e_default = 0.8              #K_e = k * rou * q'
+lidar_effective_distance_default = 2.5        #m
+camera_effective_distance_default = 2.5         #m
 vehcle_width = 0.426        #m
 vehcle_length = 0.455       #m
 lidar_position_x = 0.09     #m
 lidar_position_y = 0.0     #m
-obstacle_point_num = 360
+obstacle_point_num = 270
 decay_constant = 2.0
 
 # camera info
@@ -48,7 +50,7 @@ obstacle_point_resolution = np.pi*2 / obstacle_point_num
 dt = 1/publish_rate
 fx_inv = 1 / fx
 fy_inv = 1 / fy
-K_e_camera = K_e * fx_inv * fy_inv / (max_obstacle_height - min_obstacle_height)    
+# K_e_camera = K_e * fx_inv * fy_inv / (max_obstacle_height - min_obstacle_height)    
 
 class Obstacle_Force(Node):
 
@@ -58,8 +60,12 @@ class Obstacle_Force(Node):
     depth_camera_flag = False
     # F_x_cam = 0.0
     # F_y_cam = 0.0
+    angle_min = 0.0
     obstacle_distance_array = np.full((obstacle_point_num, 1), np.inf)       #it is a np.array
     obstacle_distance_cam_array = np.full((obstacle_point_num, 1), np.inf)
+    K_e = K_e_default
+    lidar_effective_distance = lidar_effective_distance_default
+    camera_effective_distance = camera_effective_distance_default
 
     def __init__(self):
         super().__init__("Obstacle_Force")	#node name
@@ -68,6 +74,7 @@ class Obstacle_Force(Node):
 
         self.lidar_scan_subscription = self.create_subscription(LaserScan, lidar_scan_subscript_topic, self.F_lidar_obstacle, 10)
         self.depth_cam_subscription = self.create_subscription(Image, depth_subscript_topic, self.depth_reading, 10)
+        self.parameter_subscription = self.create_subscription(Float64MultiArray, parameter_subscript_topic, self.parameter_update, 10)
 
         self.timer = self.create_timer(dt, self.force_pub)       #period time in sec, function name
 
@@ -88,9 +95,9 @@ class Obstacle_Force(Node):
             F_x = 0.0
             F_y = 0.0
             for i in range(obstacle_point_num):
-                F = -K_e * obstacle_point_resolution / self.obstacle_distance_array[i]
+                F = - self.K_e * obstacle_point_resolution / self.obstacle_distance_array[i]
                 F = F[0]     # convert 1x1 numpy array to single value
-                angle = i * obstacle_point_resolution - np.pi
+                angle = i * obstacle_point_resolution + self.angle_min
                 F_x += F * np.cos(angle)
                 F_y += F * np.sin(angle)
             Force.vector.x = F_x
@@ -103,16 +110,17 @@ class Obstacle_Force(Node):
     # Update lidar data to obstacle array
     def F_lidar_obstacle(self, msg):
         self.lidar_flag = True
+        self.angle_min = msg.angle_min
         angle = msg.angle_min
         count = 0
         len_count = len(msg.ranges)
         while count < len_count:
-            if msg.ranges[count] < lidar_effective_distance:      # msg.ranges[count] is the distance
+            if msg.ranges[count] < self.lidar_effective_distance:      # msg.ranges[count] is the distance
                 if msg.ranges[count] > self.find_boundary_distance(vehcle_width, vehcle_length, lidar_position_x, lidar_position_y, angle):
                     # F = -K_e * msg.angle_increment / msg.ranges[count]
                     # self.F_x_lidar += F * np.cos(angle)
                     # self.F_y_lidar += F * np.sin(angle)
-                    angle_num = np.divmod(angle + np.pi, obstacle_point_resolution)
+                    angle_num = np.divmod(angle - self.angle_min, obstacle_point_resolution)
                     # print(angle_num)
                     if int(angle_num[0]) < obstacle_point_num:
                         if msg.ranges[count] < self.obstacle_distance_array[int(angle_num[0])]:
@@ -137,14 +145,18 @@ class Obstacle_Force(Node):
                     z = - (v - cy) * x * fy_inv
                     if z + camera_height > min_obstacle_height and z + camera_height < max_obstacle_height:
                         distance = np.sqrt(x**2 + y**2)
-                        if distance < camera_effective_distance and distance > 0.0:
+                        if distance < self.camera_effective_distance and distance > 0.0:
                             angle = np.arctan2(y, x) 
-                            angle_num = np.divmod(angle + np.pi, obstacle_point_resolution)
+                            angle_num = np.divmod(angle - self.angle_min, obstacle_point_resolution)
                             if int(angle_num[0]) < obstacle_point_num:
                                 if distance < self.obstacle_distance_array[int(angle_num[0])]:   
                                     self.obstacle_distance_array[int(angle_num[0])] = distance      # Update obstacle array
                                     self.obstacle_distance_cam_array[int(angle_num[0])] = distance      # store obstacle from depth_cam
-
+    
+    def parameter_update(self, msg):
+        self.K_e = msg.data[0]
+        self.lidar_effective_distance = msg.data[3]
+        self.camera_effective_distance = self.lidar_effective_distance
 
     # Calculate the distance between boundary and lidar
     def find_boundary_distance(self, w, l, x, y, angle):

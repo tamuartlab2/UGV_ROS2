@@ -13,6 +13,7 @@ from sensor_msgs.msg import NavSatFix, Imu
 # from tf2_ros import TransformBroadcaster
 import haversine as hs
 from haversine import Unit
+from .o_point import O_Point
 
 
 #declare parameters
@@ -22,25 +23,21 @@ position_subscript_topic = 'Localization/GPS'
 goal_postion_subscript_topic = 'goal_point'
 auto_mode_subscript_topic = 'auto_mode'
 enable_obstacle_force_topic = 'force/enable_obstacle_force'
+parameter_subscript_topic = 'loca_and_nav/parameters'
 publish_rate = 10.0		#Hz
 # F_linear_fix = 0.8
-F_linear_fix = 0.95      #linear leading force
-goal_tolerance = 0.3        #m
+F_linear_fix_default = 1.5      #linear leading force
+goal_tolerance = 0.1        #m
 
-# set original point of the global coordinate, this should be identical for all robots and should be close to the start point of the robot (within 500 m)
-# Farm
-# lat_0 = 30.537253708625634
-# lon_0 = -96.42643216988164
-
-# TAMU CS
-lat_0 = 30.6126599
-lon_0 = -96.3431303
-
+# original point of the global coordinate
+Original_Point = O_Point()
+lat_0 = Original_Point.lat_0
+lon_0 = Original_Point.lon_0
 # lat/lon to meter linear converter
-lat_to_m = hs.haversine((lat_0, lon_0), (lat_0 + 0.001, lon_0), unit=Unit.METERS)*1000.0
-lon_to_m = hs.haversine((lat_0, lon_0), (lat_0, lon_0 + 0.001), unit=Unit.METERS)*1000.0
-m_to_lat = 1/lat_to_m
-m_to_lon = 1/lon_to_m
+lat_to_m = Original_Point.lat_to_m
+lon_to_m = Original_Point.lon_to_m
+m_to_lat = Original_Point.m_to_lat
+m_to_lon = Original_Point.m_to_lon
 
 dt = 1/publish_rate
     
@@ -75,6 +72,7 @@ class Linear_force(Node):
     # angular_vel_last = 0.0
     cmd_last = 10
     enable_obstacle_force = Bool()
+    F_linear_fix = F_linear_fix_default
 
     def __init__(self):
         super().__init__("Linear_force")	#node name
@@ -85,6 +83,7 @@ class Linear_force(Node):
         self.postion_subscription = self.create_subscription(NavSatFix, position_subscript_topic, self.postion_update, 10)
         self.goal_point_subscription = self.create_subscription(NavSatFix, goal_postion_subscript_topic, self.goal_update, 10)
         self.auto_mode_subscription = self.create_subscription(Float64MultiArray, auto_mode_subscript_topic, self.auto_mode_update, 10)
+        self.parameter_subscription = self.create_subscription(Float64MultiArray, parameter_subscript_topic, self.parameter_update, 10)
         # self.imu_subscription = self.create_subscription(Imu, "Teensy/IMU", self.imu, 10)
 
         self.timer = self.create_timer(dt, self.F_pub)  #period time in sec, function name
@@ -99,8 +98,8 @@ class Linear_force(Node):
         if self.goal_point_flag == True and self.localization_fix == True:
             self.enable_obstacle_force.data = True
             self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
-            self.F_x = F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
-            self.F_y = F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
+            self.F_x = self.F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
+            self.F_y = self.F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
             F = Vector3Stamped()
             F.header.stamp = self.get_clock().now().to_msg()
             F.vector.x = self.F_x
@@ -111,8 +110,8 @@ class Linear_force(Node):
         elif self.AUTO_MODE == 1 and self.localization_fix == True and self.scout_turn_path != 0:
             self.enable_obstacle_force.data = True
             self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
-            self.F_x = F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
-            self.F_y = F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
+            self.F_x = self.F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
+            self.F_y = self.F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
             F = Vector3Stamped()
             F.header.stamp = self.get_clock().now().to_msg()
             F.vector.x = self.F_x
@@ -234,6 +233,9 @@ class Linear_force(Node):
     #     self.vehicle_angle = ypr[0]
     #     self.F_x = F_linear_fix * np.cos(F_linear_angle - self.vehicle_angle)
     #     self.F_y = F_linear_fix * np.sin(F_linear_angle - self.vehicle_angle)
+                
+    def parameter_update(self, msg):
+        self.F_linear_fix = msg.data[6]
 
     def wrapToPi(self, angle):
         # takes an angle as input and calculates its equivalent value within the range of -pi (exclusive) to pi 

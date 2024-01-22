@@ -12,6 +12,7 @@ from tf2_ros import TransformBroadcaster
 import haversine as hs
 from haversine import Unit
 import math
+from .o_point import O_Point
 
 
 #declare parameters
@@ -24,6 +25,7 @@ odom_subscript_topic = 'Roboclaw/Odom'
 gps_subscript_topic = 'Teensy/GPS'
 gps2_subscript_topic = 'ReachM2/GPS'
 imu_subscript_topic = 'Teensy/IMU'
+odom_calibrate_topic = 'Calibrate/Odom'
 publish_rate = 10		#Hz
 fix_datum = False
 datum_lat = 30.0
@@ -31,20 +33,15 @@ datum_lon = -90.0
 datum_yaw = 0
 pub_odom_tf = True
 
-# set original point of the global coordinate, this should be identical for all robots and should be close to the start point of the robot (within 500 m)
-# Farm
-# lat_0 = 30.537253708625634
-# lon_0 = -96.42643216988164
-
-# TAMU CS
-lat_0 = 30.6126599
-lon_0 = -96.3431303
-
+# original point of the global coordinate
+Original_Point = O_Point()
+lat_0 = Original_Point.lat_0
+lon_0 = Original_Point.lon_0
 # lat/lon to meter linear converter
-lat_to_m = hs.haversine((lat_0, lon_0), (lat_0 + 0.001, lon_0), unit=Unit.METERS)*1000.0
-lon_to_m = hs.haversine((lat_0, lon_0), (lat_0, lon_0 + 0.001), unit=Unit.METERS)*1000.0
-m_to_lat = 1/lat_to_m
-m_to_lon = 1/lon_to_m
+lat_to_m = Original_Point.lat_to_m
+lon_to_m = Original_Point.lon_to_m
+m_to_lat = Original_Point.m_to_lat
+m_to_lon = Original_Point.m_to_lon
 
 x_0 = (datum_lon - lon_0)*lon_to_m
 y_0 = (datum_lat - lat_0)*lat_to_m
@@ -81,6 +78,7 @@ class Localization(Node):
         self.gps_subscription = self.create_subscription(NavSatFix, gps_subscript_topic, self.gps_update, 10)
         self.gps2_subscription = self.create_subscription(NavSatFix, gps2_subscript_topic, self.gps2_update, 10)
         self.imu_subscription = self.create_subscription(Imu, imu_subscript_topic, self.imu_update, 10)
+        self.loca_calibration_subscription = self.create_subscription(Odometry, odom_calibrate_topic, self.odom_calibrate_update, 10)
 
         self.timer = self.create_timer(1/publish_rate, self.loca_pub)  #period time in sec, function name
 
@@ -262,6 +260,24 @@ class Localization(Node):
 
                 self.x_k += K*y_tilde
                 self.P_k = (np.eye(4) - K*H)*self.P_k   
+
+    def odom_calibrate_update(self, msg):
+        self.x_k[0, 0] = msg.pose.pose.position.x
+        self.x_k[1, 0] = msg.pose.pose.position.y
+        self.P_k[0, 0] = msg.pose.covariance[0]
+        self.P_k[0, 1] = msg.pose.covariance[1]
+        self.P_k[1, 0] = msg.pose.covariance[6] 
+        self.P_k[1, 1] = msg.pose.covariance[7]
+        q = tf_transformations.quaternion_from_euler(0, 0, self.x_k[3, 0])
+        q[0] = msg.pose.pose.orientation.x
+        q[1] = msg.pose.pose.orientation.y
+        q[2] = msg.pose.pose.orientation.z
+        q[3] = msg.pose.pose.orientation.w
+        angle = self.quaternion_to_ypr(q[0], q[1], q[2], q[3])
+        self.x_k[3, 0] = angle[0]
+        self.P_k[3, 3] = msg.pose.covariance[35]
+        self.x_k[2, 0] = msg.twist.twist.linear.x
+        self.P_k[2, 2] = msg.twist.covariance[0]
 
     def wrapToPi(self, angle):
         # takes an angle as input and calculates its equivalent value within the range of -pi (exclusive) to pi 

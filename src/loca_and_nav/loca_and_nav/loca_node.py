@@ -25,7 +25,10 @@ odom_subscript_topic = 'Roboclaw/Odom'
 gps_subscript_topic = 'Teensy/GPS'
 gps2_subscript_topic = 'ReachM2/GPS'
 imu_subscript_topic = 'Teensy/IMU'
-odom_calibrate_topic = 'Calibrate/Odom'
+odom_calibrate_topic = 'Localization/Calibrate/Odom'
+calibrate_received_topic = 'Localization/Calibrate/received'
+Localization_GPS_topic = 'Localization/GPS'
+Localization_Odom_topic = 'Localization/Odom'
 publish_rate = 10		#Hz
 fix_datum = False
 datum_lat = 30.0
@@ -69,8 +72,9 @@ class Localization(Node):
     def __init__(self):
         super().__init__("Localization")	#node name
 
-        self.pubOdom = self.create_publisher(Odometry, 'Localization/Odom', 10)
-        self.pubGPS = self.create_publisher(NavSatFix, 'Localization/GPS', 10)
+        self.pubOdom = self.create_publisher(Odometry, Localization_Odom_topic, 10)
+        self.pubGPS = self.create_publisher(NavSatFix, Localization_GPS_topic, 10)
+        self.pub_calibrate_received = self.create_publisher(Bool, calibrate_received_topic, 10)
         #define tf broadcaster for Odom
         self.OdomTFBroadcaster = TransformBroadcaster(self)
 
@@ -268,7 +272,8 @@ class Localization(Node):
         self.P_k[0, 1] = msg.pose.covariance[1]
         self.P_k[1, 0] = msg.pose.covariance[6] 
         self.P_k[1, 1] = msg.pose.covariance[7]
-        q = tf_transformations.quaternion_from_euler(0, 0, self.x_k[3, 0])
+        # q = tf_transformations.quaternion_from_euler(0, 0, self.x_k[3, 0])
+        q = [0, 0, 0, 1]
         q[0] = msg.pose.pose.orientation.x
         q[1] = msg.pose.pose.orientation.y
         q[2] = msg.pose.pose.orientation.z
@@ -278,6 +283,9 @@ class Localization(Node):
         self.P_k[3, 3] = msg.pose.covariance[35]
         self.x_k[2, 0] = msg.twist.twist.linear.x
         self.P_k[2, 2] = msg.twist.covariance[0]
+        RX = Bool()
+        RX.data = True
+        self.pub_calibrate_received.publish(RX)
 
     def wrapToPi(self, angle):
         # takes an angle as input and calculates its equivalent value within the range of -pi (exclusive) to pi 

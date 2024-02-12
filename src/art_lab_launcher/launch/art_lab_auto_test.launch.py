@@ -96,6 +96,13 @@ def generate_launch_description():
                 output='screen',
                 emulate_tty=True
               )
+    
+    bag_record = Node(
+                package="art_lab_launcher",
+                executable="bag_recorder",
+                output='screen',
+                emulate_tty=True
+              )
      
     
     return LaunchDescription([ 
@@ -105,11 +112,12 @@ def generate_launch_description():
         # lidar,
         lidar_s2,
         realsense_cam,
-        # Reach_M2,
+        Reach_M2,
         localization_ekf,
         web_socket,
         nav_obstacle_force,
         nav_speed_pub,
         linear_force,
-	      compressed_image
+	      compressed_image,
+        bag_record
     ])

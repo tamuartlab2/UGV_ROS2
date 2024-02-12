@@ -193,7 +193,6 @@ class Localization(Node):
                 y_tilde = self.wrapToPi(y_tilde)
                 S = self.P_k[3, 3] + R
                 K = self.P_k*H.T/S
-
                 self.x_k += K*y_tilde
                 self.x_k[3,0] = self.wrapToPi(self.x_k[3,0])
                 self.P_k = (np.eye(4) - K*H)*self.P_k

@@ -26,12 +26,12 @@ enable_obstacle_force_topic = 'force/enable_obstacle_force'
 parameter_subscript_topic = 'loca_and_nav/parameters'
 publish_rate = 10.0		#Hz, must be the same as F_obstacle and F_linear_drive
 K_w_default = 1.5       # turning coefficient
-f_c_default = 1.0       # drag coefficient
+f_c_default = 2.0       # drag coefficient
 # back_turn_constant = 5.0
 # f_angular_c = 0.05
-linear_speed_limitation_default = 1.0       #m/s
+linear_speed_limitation_default = 0.8       #m/s
 # back_speed_limitation = 0.1         #m/s
-angular_speed_limitation_default = 0.2      #rad/s
+angular_speed_limitation_default = 0.5      #rad/s
 enable_linear_force = True
 
 dt = 1/publish_rate

@@ -26,7 +26,8 @@ enable_obstacle_force_topic = 'force/enable_obstacle_force'
 parameter_subscript_topic = 'loca_and_nav/parameters'
 publish_rate = 10.0		#Hz
 # F_linear_fix = 0.8
-F_linear_fix_default = 1.5      #linear leading force
+F_linear_fix_default = 2.5      # linear leading force
+K_p_default = 2.0		# Proportional feedback
 goal_tolerance = 0.1        #m
 
 # original point of the global coordinate
@@ -73,6 +74,8 @@ class Linear_force(Node):
     cmd_last = 10
     enable_obstacle_force = Bool()
     F_linear_fix = F_linear_fix_default
+    F_linear = 0.0
+    K_p = K_p_default
 
     def __init__(self):
         super().__init__("Linear_force")	#node name
@@ -98,8 +101,8 @@ class Linear_force(Node):
         if self.goal_point_flag == True and self.localization_fix == True:
             self.enable_obstacle_force.data = True
             self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
-            self.F_x = self.F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
-            self.F_y = self.F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
+            self.F_x = self.F_linear * np.cos(self.F_linear_angle - self.vehicle_angle)
+            self.F_y = self.F_linear * np.sin(self.F_linear_angle - self.vehicle_angle)
             F = Vector3Stamped()
             F.header.stamp = self.get_clock().now().to_msg()
             F.vector.x = self.F_x
@@ -144,12 +147,15 @@ class Linear_force(Node):
             self.d_x = (self.goal_lon - self.vehicle_lon) * lon_to_m
             self.d_y = (self.goal_lat - self.vehicle_lat) * lat_to_m
             if np.absolute(self.d_x) < goal_tolerance and np.absolute(self.d_y) < goal_tolerance:
-                self.goal_point_flag = False
+                # self.goal_point_flag = False
                 print("Reach goal point!")
-                self.enable_obstacle_force.data = False
-                self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
+                # self.enable_obstacle_force.data = False
+                # self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
             else:
                 self.F_linear_angle = np.arctan2(self.d_y, self.d_x)
+                self.F_linear = self.K_p * np.sqrt(self.d_x**2 + self.d_y**2)
+                if self.F_linear > self. F_linear_fix:
+                    self.F_linear = self. F_linear_fix
         
         if self.AUTO_MODE == 1:
             P = np.array([(self.vehicle_lon - lon_0)* lon_to_m, (self.vehicle_lat - lat_0)* lat_to_m])      #UGV point
@@ -236,6 +242,7 @@ class Linear_force(Node):
                 
     def parameter_update(self, msg):
         self.F_linear_fix = msg.data[6]
+        self.K_p = msg.data[7]
 
     def wrapToPi(self, angle):
         # takes an angle as input and calculates its equivalent value within the range of -pi (exclusive) to pi 

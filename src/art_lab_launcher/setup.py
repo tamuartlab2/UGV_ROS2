@@ -26,6 +26,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'bag_recorder = art_lab_launcher.record_node:main',
         ],
     },
 )

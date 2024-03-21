@@ -124,10 +124,12 @@ class Localization(Node):
             filtered_gps.status.status = 0
             filtered_gps.latitude = self.x_k[1, 0] * m_to_lat + lat_0
             filtered_gps.longitude = self.x_k[0, 0] * m_to_lon + lon_0
+            filtered_gps.altitude = self.x_k[3, 0]
             filtered_gps.position_covariance[0] = self.P_k[0, 0]
             filtered_gps.position_covariance[1] = self.P_k[0, 1]
             filtered_gps.position_covariance[3] = self.P_k[1, 0]
             filtered_gps.position_covariance[4] = self.P_k[1, 1]
+            filtered_gps.position_covariance[8] = self.P_k[3, 3]
             self.pubGPS.publish(filtered_gps)
 
 
@@ -267,6 +269,11 @@ class Localization(Node):
     def odom_calibrate_update(self, msg):
         self.x_k[0, 0] = msg.pose.pose.position.x
         self.x_k[1, 0] = msg.pose.pose.position.y
+
+        #if not gps coordinate, comment following lines
+        self.x_k[0, 0] = (self.x_k[0, 0] - lon_0)*lon_to_m
+        self.x_k[1, 0] = (self.x_k[1, 0] - lat_0)*lat_to_m
+
         self.P_k[0, 0] = msg.pose.covariance[0]
         self.P_k[0, 1] = msg.pose.covariance[1]
         self.P_k[1, 0] = msg.pose.covariance[6] 

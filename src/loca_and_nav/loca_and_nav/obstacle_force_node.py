@@ -27,7 +27,8 @@ publish_rate = 10.0		#Hz
 K_e_default = 0.8              #K_e = k * rou * q'
 lidar_effective_distance_default = 2.5        #m
 camera_effective_distance_default = 2.5         #m
-vehcle_width = 0.426        #m
+# vehcle_width = 0.426        #m
+vehcle_width = 0.25        #m, in narrow space
 vehcle_length = 0.455       #m
 lidar_position_x = 0.09     #m
 lidar_position_y = 0.0     #m

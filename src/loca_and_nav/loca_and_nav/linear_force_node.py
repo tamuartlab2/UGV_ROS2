@@ -24,11 +24,13 @@ goal_postion_subscript_topic = 'goal_point'
 auto_mode_subscript_topic = 'auto_mode'
 enable_obstacle_force_topic = 'force/enable_obstacle_force'
 parameter_subscript_topic = 'loca_and_nav/parameters'
+reach_goal_topic = 'loca_and_nav/reach_goal'
 publish_rate = 10.0		#Hz
 # F_linear_fix = 0.8
 F_linear_fix_default = 2.5      # linear leading force
 K_p_default = 2.0		# Proportional feedback
 goal_tolerance = 0.1        #m
+reach_count_threshold = 10
 
 # original point of the global coordinate
 Original_Point = O_Point()
@@ -76,12 +78,15 @@ class Linear_force(Node):
     F_linear_fix = F_linear_fix_default
     F_linear = 0.0
     K_p = K_p_default
+    reach_count = 0
 
     def __init__(self):
         super().__init__("Linear_force")	#node name
 
         self.pubF = self.create_publisher(Vector3Stamped, F_linear_drive_pub_topic, 10)
         self.pub_enable_obstacle_force = self.create_publisher(Bool, enable_obstacle_force_topic, 10)
+        self.pub_reach_goal = self.create_publisher(Bool, reach_goal_topic, 10)
+
         self.angle_subscription = self.create_subscription(Odometry, angle_subscript_topic, self.angle_update, 10)
         self.postion_subscription = self.create_subscription(NavSatFix, position_subscript_topic, self.postion_update, 10)
         self.goal_point_subscription = self.create_subscription(NavSatFix, goal_postion_subscript_topic, self.goal_update, 10)
@@ -147,10 +152,16 @@ class Linear_force(Node):
             self.d_x = (self.goal_lon - self.vehicle_lon) * lon_to_m
             self.d_y = (self.goal_lat - self.vehicle_lat) * lat_to_m
             if np.absolute(self.d_x) < goal_tolerance and np.absolute(self.d_y) < goal_tolerance:
-                # self.goal_point_flag = False
-                print("Reach goal point!")
-                # self.enable_obstacle_force.data = False
-                # self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
+                self.reach_count += 1
+                if self.reach_count > reach_count_threshold:
+                    print("Reach goal point!")
+                    goal_reach_indicator = Bool()
+                    goal_reach_indicator.data = True
+                    self.pub_reach_goal.publish(goal_reach_indicator)
+                    self.reach_count = 0
+                    # self.goal_point_flag = False
+                    # self.enable_obstacle_force.data = False
+                    # self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
             else:
                 self.F_linear_angle = np.arctan2(self.d_y, self.d_x)
                 self.F_linear = self.K_p * np.sqrt(self.d_x**2 + self.d_y**2)

@@ -9,11 +9,11 @@ from sensor_msgs.msg import NavSatFix, Imu
 
 teensySerial = serial.Serial('/dev/TeensyCOM', baudrate=115200, timeout=0.1)
 print_imu_diagnosis = 0
-compass_incorrect_cov = math.pi/3
-compass_correct_cov = 3.0*math.pi/180.0
-gyro_incorrect_cov = math.pi/3
-gyro_correct_cov = 5.0238538949e-4
-accel_incorrect_cov = 10.0
+compass_incorrect_cov = (math.pi/3)**2
+compass_correct_cov = (3.0*math.pi/180.0)**2
+gyro_incorrect_cov = (math.pi/3)**2
+gyro_correct_cov = 5.0238538949e-3
+accel_incorrect_cov = 100.0
 accel_correct_cov = 6.0952
 
 teensySerial.write(b'\x04')     #Calibrate IMU cmd
@@ -64,7 +64,7 @@ class IMUGPS(Node):
                 imuMsg.linear_acceleration.y, = struct.unpack('f', teensySerial.read(4))
                 imuMsg.linear_acceleration.z, = struct.unpack('f', teensySerial.read(4))
                 Compass.data, = struct.unpack('f', teensySerial.read(4))
-                if imuMsg.orientation.x == 0.0 and imuMsg.orientation.y == 0.0 and imuMsg.orientation.z == 0.0 and imuMsg.orientation.w == 0.0:
+                if imuMsg.orientation.x + imuMsg.orientation.y + imuMsg.orientation.z + imuMsg.orientation.w == 0:
                     self.get_logger().info('BNO055 is dead.')
                 else:
                     Compass.data += 90

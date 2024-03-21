@@ -69,6 +69,12 @@ def generate_launch_description():
          '/rosbridge_websocket_launch.xml'])
       ) 
     
+    tcp_ip = IncludeLaunchDescription(
+      PythonLaunchDescriptionSource([os.path.join(
+         get_package_share_directory('ros_tcp_endpoint'), 'launch'),
+         '/endpoint.launch.py'])
+      ) 
+    
     localization_ekf = Node(
                    package="loca_and_nav",
                    executable="localization",
@@ -114,7 +120,8 @@ def generate_launch_description():
         realsense_cam,
         Reach_M2,
         localization_ekf,
-        web_socket,
+        tcp_ip,
+        # web_socket,
         # nav_obstacle_force,
         # nav_speed_pub,
         # linear_force,

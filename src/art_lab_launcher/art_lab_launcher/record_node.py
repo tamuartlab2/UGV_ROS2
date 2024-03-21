@@ -139,7 +139,7 @@ class BagRecorder(Node):
             lidar_topic,
             self.lidar_topic_callback,
             10)
-
+    
     def teensy_imu_topic_callback(self, msg):
         self.writer.write(
             imu_topic,

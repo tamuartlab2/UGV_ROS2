@@ -36,14 +36,14 @@ def generate_launch_description():
                 # {"Max_angular_speed": 4.0833}          #rad/s
 
                 #Aion R1 slow
-                # {"Publish_topic": '/cmd_vel'},
-                # {"Max_linear_speed": 0.5},        #m/s
-                # {"Max_angular_speed": 0.5}          #rad/s
+                {"Publish_topic": '/cmd_vel'},
+                {"Max_linear_speed": 1.2},        #m/s
+                {"Max_angular_speed": 1.0}          #rad/s
 
                 #CLAW
-                {"Publish_topic": '/cmd_vel'},
-                {"Max_linear_speed": 0.31416},        #m/s
-                {"Max_angular_speed": 0.62832}          #rad/s
+                # {"Publish_topic": '/cmd_vel'},
+                # {"Max_linear_speed": 0.31416},        #m/s
+                # {"Max_angular_speed": 0.62832}          #rad/s
 
             ]
         )

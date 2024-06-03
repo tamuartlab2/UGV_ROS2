@@ -1,10 +1,11 @@
 import rclpy
+import math
 import numpy as np
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, Vector3Stamped 
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, Image
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, UInt8MultiArray
 
 # from std_msgs.msg import String, Bool, Float64, Int8
 # from sensor_msgs.msg import NavSatFix, Imu
@@ -22,9 +23,11 @@ F_obstacle_pub_topic = 'force/obstacle'
 lidar_scan_subscript_topic = 'scan'
 depth_subscript_topic = "camera/aligned_depth_to_color/image_raw"
 parameter_subscript_topic = 'loca_and_nav/parameters'
+scout_lidar_topic = 'scout_lidar_check'
 enable_camera = True
+enable_plant_scout_check = True
 publish_rate = 10.0		#Hz
-K_e_default = 0.8              #K_e = k * rou * q'
+K_e_default = 1.6              #K_e = k * rou * q'
 lidar_effective_distance_default = 2.5        #m
 camera_effective_distance_default = 2.5         #m
 # vehcle_width = 0.426        #m
@@ -34,6 +37,16 @@ lidar_position_x = 0.09     #m
 lidar_position_y = 0.0     #m
 obstacle_point_num = 270
 decay_constant = 2.0
+
+#plant lidar check parameter
+check_distance = 3.0       #m
+check_angle_range = 20.0 * np.pi / 180.0
+left_angle_min = 0.5 * (np.pi - check_angle_range)
+left_angle_max = 0.5 * (np.pi + check_angle_range)
+right_angle_min = 0.5 * (- np.pi - check_angle_range)
+right_angle_max = 0.5 * (- np.pi + check_angle_range)
+low_threshold = 0.15
+high_threshold = 0.75
 
 # camera info
 depthScale = 0.001      #m
@@ -67,11 +80,14 @@ class Obstacle_Force(Node):
     K_e = K_e_default
     lidar_effective_distance = lidar_effective_distance_default
     camera_effective_distance = camera_effective_distance_default
+    left_status_last = True
+    right_status_last = True
 
     def __init__(self):
         super().__init__("Obstacle_Force")	#node name
 
         self.pub_F = self.create_publisher(Vector3Stamped, F_obstacle_pub_topic, 10)
+        self.scout_lidar_pub = self.create_publisher(UInt8MultiArray, scout_lidar_topic, 10)
 
         self.lidar_scan_subscription = self.create_subscription(LaserScan, lidar_scan_subscript_topic, self.F_lidar_obstacle, 10)
         self.depth_cam_subscription = self.create_subscription(Image, depth_subscript_topic, self.depth_reading, 10)
@@ -113,8 +129,14 @@ class Obstacle_Force(Node):
         self.lidar_flag = True
         self.angle_min = msg.angle_min
         angle = msg.angle_min
-        count = 0
         len_count = len(msg.ranges)
+
+        count = 0
+        left_p_count = 0
+        left_count = 0
+        right_p_count = 0
+        right_count = 0
+
         while count < len_count:
             if msg.ranges[count] < self.lidar_effective_distance:      # msg.ranges[count] is the distance
                 if msg.ranges[count] > self.find_boundary_distance(vehcle_width, vehcle_length, lidar_position_x, lidar_position_y, angle):
@@ -126,9 +148,59 @@ class Obstacle_Force(Node):
                     if int(angle_num[0]) < obstacle_point_num:
                         if msg.ranges[count] < self.obstacle_distance_array[int(angle_num[0])]:
                             self.obstacle_distance_array[int(angle_num[0])] = msg.ranges[count]
+                    
+                    if enable_plant_scout_check == True:
+                        check_angle = self.wrapToPi(angle)
+                        if check_angle > left_angle_min and check_angle < left_angle_max:
+                            left_count += 1
+                            if  msg.ranges[count] < check_distance:
+                                left_p_count += 1
+                        if check_angle > right_angle_min and check_angle < right_angle_max:
+                            right_count += 1
+                            if  msg.ranges[count] < check_distance:
+                                right_p_count += 1
 
             angle += msg.angle_increment
             count += 1
+
+        if enable_plant_scout_check:
+            pub_msg = UInt8MultiArray()
+            pub_msg.data = [0, 0, 0, 0]
+            if left_count == 0:
+                left_ocupancy = 0
+            else:
+                left_ocupancy = left_p_count / left_count
+            if right_count == 0:
+                right_ocupancy = 0
+            else:
+                right_ocupancy = right_p_count / right_count
+            # data[1] is left, tiggered on high to low
+            if self.left_status_last == False and left_ocupancy > high_threshold:
+                self.left_status_last = True
+                pub_msg.data[1] = 0
+            elif self.left_status_last == True and left_ocupancy < low_threshold:
+                self.left_status_last = False
+                pub_msg.data[1] = 1
+            else:
+                pub_msg.data[1] = 0
+
+            # data[2] is right, tiggered on high to low
+            if self.right_status_last == False and right_ocupancy > high_threshold:
+                right_status = True
+                self.right_status_last = right_status
+                pub_msg.data[2] = 0
+            elif self.right_status_last == True and right_ocupancy < low_threshold:
+                right_status = False
+                self.right_status_last = right_status
+                pub_msg.data[2] = 1
+            else:
+                pub_msg.data[2] = 0
+            
+            if left_ocupancy < low_threshold and right_ocupancy < low_threshold:
+                pub_msg.data[0] = 0
+            else:
+                pub_msg.data[0] = 1
+            self.scout_lidar_pub.publish(pub_msg)
     
     # Update depth camera data to obstacle array
     def depth_reading(self, msg):
@@ -173,6 +245,13 @@ class Obstacle_Force(Node):
         elif np.arctan2(-(w/2+y), -(l/2+x)) < angle and angle <= np.arctan2(-(w/2+y), l/2-x):
             d = -(w/2 + y) / np.sin(angle) 
         return d
+    
+    def wrapToPi(self, angle):
+        # takes an angle as input and calculates its equivalent value within the range of -pi (exclusive) to pi 
+        wrapped_angle = angle % (2 * math.pi)
+        if wrapped_angle > math.pi:
+            wrapped_angle -= 2 * math.pi
+        return wrapped_angle
 
 def main():
 	rclpy.init()

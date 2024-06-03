@@ -5,8 +5,9 @@ from geometry_msgs.msg import Twist, Vector3Stamped
 from nav_msgs.msg import Odometry
 import math
 # from std_msgs.msg import String, Bool, Float64, Int8
-from std_msgs.msg import Float64MultiArray, Bool
+from std_msgs.msg import Float64MultiArray, Bool, UInt8MultiArray
 from sensor_msgs.msg import NavSatFix, Imu
+# from sensor_msgs.msg import LaserScan
 # import tf_transformations
 # from tf_transformations import euler_from_quaternion
 # from geometry_msgs.msg import TransformStamped
@@ -25,12 +26,15 @@ auto_mode_subscript_topic = 'auto_mode'
 enable_obstacle_force_topic = 'force/enable_obstacle_force'
 parameter_subscript_topic = 'loca_and_nav/parameters'
 reach_goal_topic = 'loca_and_nav/reach_goal'
+scout_lidar_topic = 'scout_lidar_check'
+# lidar_scan_subscript_topic = 'scan'
 publish_rate = 10.0		#Hz
 # F_linear_fix = 0.8
-F_linear_fix_default = 2.5      # linear leading force
-K_p_default = 2.0		# Proportional feedback
-goal_tolerance = 0.1        #m
-reach_count_threshold = 10
+F_linear_fix_default = 2.0      # linear leading force
+K_p_default = 2.0		# Proportional Gain
+K_I_default = 0.1       # Integral Gain
+goal_tolerance = 0.5        #m
+reach_count_threshold = 50
 
 # original point of the global coordinate
 Original_Point = O_Point()
@@ -74,11 +78,20 @@ class Linear_force(Node):
     P_turn = np.array([0.0, 0.0])
     # angular_vel_last = 0.0
     cmd_last = 10
+    lidar_check_last = 1
+    turn_mode = True    #True is left turn. False is right turn.
     enable_obstacle_force = Bool()
     F_linear_fix = F_linear_fix_default
     F_linear = 0.0
+    F_linear_last = 0.0
+    distance_last = 0.0
     K_p = K_p_default
+    K_I = K_I_default
+    A_1 = K_p + 0.5 * K_I * dt
+    A_2 = -K_p + 0.5 * K_I * dt
+    
     reach_count = 0
+    scout_sensor_mode = 0
 
     def __init__(self):
         super().__init__("Linear_force")	#node name
@@ -90,7 +103,8 @@ class Linear_force(Node):
         self.angle_subscription = self.create_subscription(Odometry, angle_subscript_topic, self.angle_update, 10)
         self.postion_subscription = self.create_subscription(NavSatFix, position_subscript_topic, self.postion_update, 10)
         self.goal_point_subscription = self.create_subscription(NavSatFix, goal_postion_subscript_topic, self.goal_update, 10)
-        self.auto_mode_subscription = self.create_subscription(Float64MultiArray, auto_mode_subscript_topic, self.auto_mode_update, 10)
+        self.auto_mode_subscription = self.create_subscription(NavSatFix, auto_mode_subscript_topic, self.auto_mode_update, 10)
+        self.scout_lidar_subscription = self.create_subscription(UInt8MultiArray, scout_lidar_topic, self.scout_lidar_update, 10)
         self.parameter_subscription = self.create_subscription(Float64MultiArray, parameter_subscript_topic, self.parameter_update, 10)
         # self.imu_subscription = self.create_subscription(Imu, "Teensy/IMU", self.imu, 10)
 
@@ -115,24 +129,25 @@ class Linear_force(Node):
             self.pubF.publish(F)
             self.localization_fix = False
         
-        elif self.AUTO_MODE == 1 and self.localization_fix == True and self.scout_turn_path != 0:
-            self.enable_obstacle_force.data = True
-            self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
-            self.F_x = self.F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
-            self.F_y = self.F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
-            F = Vector3Stamped()
-            F.header.stamp = self.get_clock().now().to_msg()
-            F.vector.x = self.F_x
-            F.vector.y = self.F_y
-            self.pubF.publish(F)
-            self.localization_fix = False
-            if self.row_number == self.row_count:
-                self.scout_turn_path = 0
-                self.AUTO_MODE = 0
-                print("Finish scouting!")
-                self.row_count = 0
-                self.enable_obstacle_force.data = False
+        elif self.localization_fix == True and self.scout_turn_path != 0:
+            if self.AUTO_MODE == 1 or self.AUTO_MODE == 2:
+                self.enable_obstacle_force.data = True
                 self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
+                self.F_x = self.F_linear_fix * np.cos(self.F_linear_angle - self.vehicle_angle)
+                self.F_y = self.F_linear_fix * np.sin(self.F_linear_angle - self.vehicle_angle)
+                F = Vector3Stamped()
+                F.header.stamp = self.get_clock().now().to_msg()
+                F.vector.x = self.F_x
+                F.vector.y = self.F_y
+                self.pubF.publish(F)
+                self.localization_fix = False
+                if self.row_number == self.row_count:
+                    self.scout_turn_path = 0
+                    self.AUTO_MODE = 0
+                    print("Finish scouting!")
+                    self.row_count = 0
+                    self.enable_obstacle_force.data = False
+                    self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
             
 
     def angle_update(self, msg):
@@ -143,6 +158,40 @@ class Linear_force(Node):
         ypr = self.quaternion_to_ypr(x, y, z, w)
         self.vehicle_angle = ypr[0]
         
+    def scout_lidar_update(self, msg):
+        if self.AUTO_MODE == 2:
+            if self.scout_turn_path == 1: 
+                if np.mod(self.row_count, 2) == 0:
+                    self.F_linear_angle = self.scout_orientation
+                else:
+                    self.F_linear_angle = self.wrapToPi(self.scout_orientation + np.pi)
+                d_scout_angle = self.wrapToPi(self.vehicle_angle - self.F_linear_angle)
+                if self.lidar_check_last == 1 and msg.data[0] == 0 and d_scout_angle > -0.3 and d_scout_angle < 0.3:
+                    self.row_count += 1
+                    self.scout_turn_path = 2
+                    print("Turning!")
+            elif self.scout_turn_path == 2:
+                if self.turn_mode == True:      #Left turn
+                    if msg.data[1] == 0: 
+                        self.F_linear_angle = self.change_row_orientation
+                    else:
+                        d_angle = self.wrapToPi(self.vehicle_angle - self.change_row_orientation)
+                        if d_angle > -0.2 and d_angle < 0.2:       
+                            # Enter next row
+                            self.scout_turn_path = 1
+                            print("Enter next row!")
+                            self.turn_mode = not self.turn_mode
+                else:       #Right turn
+                    if msg.data[2] == 0:
+                        self.F_linear_angle = self.change_row_orientation
+                    else:
+                        d_angle = self.wrapToPi(self.vehicle_angle - self.change_row_orientation)
+                        if d_angle > -0.2 and d_angle < 0.2:         
+                            # Enter next row
+                            self.scout_turn_path = 1
+                            print("Enter next row!")
+                            self.turn_mode = not self.turn_mode
+        self.lidar_check_last = msg.data[0]
 
     def postion_update(self, msg):
         self.localization_fix = True
@@ -164,9 +213,12 @@ class Linear_force(Node):
                     # self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
             else:
                 self.F_linear_angle = np.arctan2(self.d_y, self.d_x)
-                self.F_linear = self.K_p * np.sqrt(self.d_x**2 + self.d_y**2)
+                distance = np.sqrt(self.d_x**2 + self.d_y**2)
+                self.F_linear = self.F_linear_last + self.A_1 * distance + self.A_2 * self.distance_last
                 if self.F_linear > self. F_linear_fix:
                     self.F_linear = self. F_linear_fix
+                self.F_linear_last = self.F_linear
+                self.distance_last = distance
         
         if self.AUTO_MODE == 1:
             P = np.array([(self.vehicle_lon - lon_0)* lon_to_m, (self.vehicle_lat - lat_0)* lat_to_m])      #UGV point
@@ -178,11 +230,14 @@ class Linear_force(Node):
                     if self.reach_line(P0, P1, P2, P) == False: 
                         self.F_linear_angle = self.scout_orientation
                         # print("Scouting!")
-                    else:       # Reach first row end
-                        self.row_count += 1
-                        self.scout_turn_path = 2
-                        self.P_turn = P
-                        print("Turning!")
+                    else:       
+                        if self.lidar_check_last == 1: #Fake finish
+                            self.F_linear_angle = self.scout_orientation
+                        else: # Reach first row end
+                            self.row_count += 1
+                            self.scout_turn_path = 2
+                            self.P_turn = P
+                            print("Turning!")
                 else:
                     P0 = np.array([(self.lon_c1 - lon_0)* lon_to_m, (self.lat_c1 - lat_0)* lat_to_m])
                     P1 = np.array([(self.lon_c0 - lon_0)* lon_to_m, (self.lat_c0 - lat_0)* lat_to_m])
@@ -190,11 +245,14 @@ class Linear_force(Node):
                     if self.reach_line(P0, P1, P2, P) == False: 
                         self.F_linear_angle = self.wrapToPi(self.scout_orientation + np.pi)
                         # print("Scouting!")
-                    else:       # Reach first row end
-                        self.row_count += 1
-                        self.scout_turn_path = 2
-                        self.P_turn = P
-                        print("Turning!")
+                    else:      
+                        if self.lidar_check_last == 1: #Fake finish
+                            self.F_linear_angle = self.wrapToPi(self.scout_orientation + np.pi)
+                        else: # Reach row end    
+                            self.row_count += 1
+                            self.scout_turn_path = 2
+                            self.P_turn = P
+                            print("Turning!")
             elif self.scout_turn_path == 2:
                 P0 = self.P_turn
                 P1 = self.P_turn + np.array([self.row_width * np.cos(self.change_row_orientation), self.row_width * np.sin(self.change_row_orientation)])
@@ -204,7 +262,6 @@ class Linear_force(Node):
                 else:       # Enter next row
                     self.scout_turn_path = 1
                     print("Enter next row!")
-                    
     
     def goal_update(self, msg):
         if self.AUTO_MODE == 0:
@@ -218,29 +275,49 @@ class Linear_force(Node):
                 self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
 
     def auto_mode_update(self, msg):
-        cmd = int(msg.data[0])
+        cmd = int(msg.position_covariance[0])
         if cmd == 0:
             self.AUTO_MODE = cmd
             self.cmd_last = cmd
             print("Goal point mode!")
-        elif cmd == 1:
-            if self.cmd_last!= cmd:
-                print("Field scouting mode!")
-                self.AUTO_MODE = cmd
-                self.lat_c0 = msg.data[1]
-                self.lon_c0 = msg.data[2]
-                self.lat_c1 = msg.data[3]
-                self.lon_c1 = msg.data[4]
-                self.lat_c2 = msg.data[5]
-                self.lon_c2 = msg.data[6]
-                self.row_width = msg.data[7]
-                # self.row_number = int(msg.data[8])
-                self.scout_orientation = np.arctan2((self.lat_c1 - self.lat_c0) * lat_to_m, (self.lon_c1 - self.lon_c0) * lon_to_m)
-                self.change_row_orientation = np.arctan2((self.lat_c2 - self.lat_c1) * lat_to_m, (self.lon_c2 - self.lon_c1) * lon_to_m)
-                print("Scout orientation: " + str(self.scout_orientation))
-                print("Turn orientation: " + str(self.change_row_orientation))
-                self.scout_turn_path = 1
-                self.cmd_last = cmd
+        else:
+            self.goal_point_flag = False
+            if cmd == 1:
+                if self.cmd_last!= cmd:
+                    print("Field scouting mode!")
+                    self.AUTO_MODE = cmd
+                    self.lat_c0 = msg.latitude
+                    self.lon_c0 = msg.longitude
+                    self.lat_c1 = msg.position_covariance[1]
+                    self.lon_c1 = msg.position_covariance[2]
+                    self.lat_c2 = msg.position_covariance[3]
+                    self.lon_c2 = msg.position_covariance[4]
+                    self.row_width = msg.position_covariance[5]
+                    self.row_number = int(msg.position_covariance[6])
+                    self.scout_orientation = np.arctan2((self.lat_c1 - self.lat_c0) * lat_to_m, (self.lon_c1 - self.lon_c0) * lon_to_m)
+                    self.change_row_orientation = np.arctan2((self.lat_c2 - self.lat_c1) * lat_to_m, (self.lon_c2 - self.lon_c1) * lon_to_m)
+                    print("Scout orientation: " + str(self.scout_orientation))
+                    print("Turn orientation: " + str(self.change_row_orientation))
+                    self.scout_turn_path = 1
+                    self.cmd_last = cmd
+            elif cmd == 2:
+                if self.cmd_last!= cmd:
+                    self.AUTO_MODE = cmd
+                    self.scout_turn_path = 1
+                    self.cmd_last = cmd
+                    self.scout_orientation = msg.position_covariance[1]
+                    self.change_row_orientation = msg.position_covariance[2]
+                    self.row_number = int(msg.position_covariance[3])
+                    print("Scout orientation: " + str(self.scout_orientation))
+                    print("Turn orientation: " + str(self.change_row_orientation))
+
+                    if self.wrapToPi(self.scout_orientation - self.change_row_orientation) >= 0:
+                        self.turn_mode = False  #Right turn
+                    else:
+                        self.turn_mode = True  #Left turn
+                
+
+
     # def imu(self, msg):
     #     x = msg.orientation.x
     #     y = msg.orientation.y

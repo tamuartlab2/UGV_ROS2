@@ -10,10 +10,18 @@ class O_Point():
     # TAMU CS
     # lat_0 = 30.6126599
     # lon_0 = -96.3431303
+
+    # ART Lab
+    lat_0 = 30.617017659079263
+    lon_0 = -96.34105620732312
     
     # Unity simulation
-    lat_0 = 30.62277
-    lon_0 = -96.3346
+    # lat_0 = 30.62277
+    # lon_0 = -96.3346
+
+    # Texas A & M AgriLife Research and Extension Center Corpus Christi
+    # lat_0 = 27.782465 
+    # lon_0 = -97.561410
 
     def __init__(self):
         self.lat_to_m = hs.haversine((self.lat_0, self.lon_0), (self.lat_0 + 0.001, self.lon_0), unit=Unit.METERS)*1000.0

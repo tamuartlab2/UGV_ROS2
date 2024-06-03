@@ -27,6 +27,7 @@ setup(
             'speed_pub = loca_and_nav.speed_pub_node:main',
             'obstacle_force = loca_and_nav.obstacle_force_node:main',
             'linear_force = loca_and_nav.linear_force_node:main',
+            'spring_damper = loca_and_nav.spring_damper_node:main',
         ],
     },
 )

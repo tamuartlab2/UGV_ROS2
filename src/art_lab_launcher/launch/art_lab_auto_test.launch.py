@@ -97,6 +97,13 @@ def generate_launch_description():
                 emulate_tty=True
               )
     
+    spring_damper = Node(
+                package="loca_and_nav",
+                executable="spring_damper",
+                output='screen',
+                emulate_tty=True
+              )
+    
     bag_record = Node(
                 package="art_lab_launcher",
                 executable="bag_recorder",
@@ -118,6 +125,7 @@ def generate_launch_description():
         nav_obstacle_force,
         nav_speed_pub,
         linear_force,
+        spring_damper,
 	      compressed_image,
         bag_record
     ])

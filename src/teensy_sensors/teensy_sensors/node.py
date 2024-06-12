@@ -117,8 +117,8 @@ class IMUGPS(Node):
                 GPSmsg.header.stamp = self.get_clock().now().to_msg()
                 GPSmsg.latitude = latitudeData
                 GPSmsg.longitude = longitudeData
-                GPSmsg.position_covariance = [6.25, 0., 0.,
-                                              0., 6.25, 0.,
+                GPSmsg.position_covariance = [9.0, 0., 0.,
+                                              0., 9.0, 0.,
                                               0., 0., 0.]  
                 if GPSfix == 0:
                     self.get_logger().info('GPS is not fixed.')

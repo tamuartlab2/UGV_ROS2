@@ -15,13 +15,14 @@ angle_subscript_topic = 'Localization/Odom'
 position_subscript_topic = 'Localization/GPS'
 spring_damper_enabled_topic = 'force/spring_damper_enabled'
 
-publish_rate = 10		#Hz
+publish_rate = 2.5		#Hz
 dt = 1/publish_rate
 
 SD_connection_number = 3
 K_spring = 1.0
 K_damper = 0.5
 d_desired = 3.0
+F_side_max = 1.0
 
 # original point of the global coordinate
 Original_Point = O_Point()
@@ -75,6 +76,9 @@ class SpringDamper(Node):
                     F_d = 0.0
                 self.F_x += (F_s + F_d) * np.cos(row[2] - self.vehicle_angle)
                 self.F_y += (F_s + F_d) * np.sin(row[2] - self.vehicle_angle)
+
+            self.F_x = self.limitForce(self.F_x, F_side_max)
+            self.F_y = self.limitForce(self.F_y, F_side_max)
 
             F = Vector3Stamped()
             F.header.stamp = self.get_clock().now().to_msg()
@@ -174,6 +178,14 @@ class SpringDamper(Node):
             linear_angle = np.arctan2(d_y, d_x)
             robot_dis.append([data_entry[0], distance, linear_angle, data_entry[3]])
         return robot_dis
+    
+    def limitForce(self, F_input, F_limit):
+        F_output = F_input
+        if F_input > F_limit:
+            F_output = F_limit
+        elif F_input < -F_limit:
+            F_output = -F_limit
+        return F_output
 
 def main():
     rclpy.init()

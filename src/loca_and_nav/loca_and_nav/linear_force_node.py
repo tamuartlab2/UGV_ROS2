@@ -28,13 +28,14 @@ parameter_subscript_topic = 'loca_and_nav/parameters'
 reach_goal_topic = 'loca_and_nav/reach_goal'
 scout_lidar_topic = 'scout_lidar_check'
 # lidar_scan_subscript_topic = 'scan'
-publish_rate = 10.0		#Hz
+publish_rate = 2.5		#Hz
 # F_linear_fix = 0.8
-F_linear_fix_default = 2.0      # linear leading force
-K_p_default = 2.0		# Proportional Gain
-K_I_default = 0.1       # Integral Gain
-goal_tolerance = 0.5        #m
-reach_count_threshold = 50
+F_linear_fix_default = 2.4      # linear leading force
+F_goal_point_max = 2.4
+K_p_default = 20.0		# Proportional Gain
+K_I_default = 0.0       # Integral Gain
+goal_tolerance = 1.0        #m
+reach_count_threshold = 20
 
 # original point of the global coordinate
 Original_Point = O_Point()
@@ -215,10 +216,12 @@ class Linear_force(Node):
                 self.F_linear_angle = np.arctan2(self.d_y, self.d_x)
                 distance = np.sqrt(self.d_x**2 + self.d_y**2)
                 self.F_linear = self.F_linear_last + self.A_1 * distance + self.A_2 * self.distance_last
-                if self.F_linear > self. F_linear_fix:
-                    self.F_linear = self. F_linear_fix
+                # self.F_linear = self.K_p * distance
+
                 self.F_linear_last = self.F_linear
                 self.distance_last = distance
+                if self.F_linear > F_goal_point_max:
+                    self.F_linear = F_goal_point_max
         
         if self.AUTO_MODE == 1:
             P = np.array([(self.vehicle_lon - lon_0)* lon_to_m, (self.vehicle_lat - lat_0)* lat_to_m])      #UGV point

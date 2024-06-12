@@ -26,8 +26,8 @@ parameter_subscript_topic = 'loca_and_nav/parameters'
 scout_lidar_topic = 'scout_lidar_check'
 enable_camera = True
 enable_plant_scout_check = True
-publish_rate = 10.0		#Hz
-K_e_default = 1.6              #K_e = k * rou * q'
+publish_rate = 2.5		#Hz
+K_e_default = 0.8              #K_e = k * rou * q'
 lidar_effective_distance_default = 2.5        #m
 camera_effective_distance_default = 2.5         #m
 # vehcle_width = 0.426        #m
@@ -35,7 +35,7 @@ vehcle_width = 0.25        #m, in narrow space
 vehcle_length = 0.455       #m
 lidar_position_x = 0.09     #m
 lidar_position_y = 0.0     #m
-obstacle_point_num = 270
+obstacle_point_num = 100
 decay_constant = 2.0
 
 #plant lidar check parameter
@@ -112,7 +112,7 @@ class Obstacle_Force(Node):
             F_x = 0.0
             F_y = 0.0
             for i in range(obstacle_point_num):
-                F = - self.K_e * obstacle_point_resolution / self.obstacle_distance_array[i]
+                F = - self.K_e * obstacle_point_resolution / (self.obstacle_distance_array[i])**2
                 F = F[0]     # convert 1x1 numpy array to single value
                 angle = i * obstacle_point_resolution + self.angle_min
                 F_x += F * np.cos(angle)

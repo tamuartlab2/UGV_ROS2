@@ -25,12 +25,12 @@ motor_speed_subscript_topic = 'Roboclaw/Odom'
 speed_pub_topic = 'cmd_vel'
 enable_obstacle_force_topic = 'force/enable_obstacle_force'
 parameter_subscript_topic = 'loca_and_nav/parameters'
-publish_rate = 10.0		#Hz, must be the same as F_obstacle and F_linear_drive
+publish_rate = 2.5		#Hz, must be the same as F_obstacle and F_linear_drive
 K_w_default = 15.0       # turning coefficient
-f_c_default = 2.0       # drag coefficient
+f_c_default = 2.99       # drag coefficient
 # back_turn_constant = 5.0
 # f_angular_c = 0.05
-linear_speed_limitation_default = 1.0       #m/s
+linear_speed_limitation_default = 0.8       #m/s
 # back_speed_limitation = 0.1         #m/s
 angular_speed_limitation_default = 0.8      #rad/s
 enable_linear_force = True
@@ -49,6 +49,9 @@ class Speed_Pub(Node):
     f_c = f_c_default
     linear_speed_limitation = linear_speed_limitation_default
     angular_speed_limitation = angular_speed_limitation_default
+    F_linear_updated = False
+    F_obstacle_updated = False
+    F_sd_updated = False
 
     def __init__(self):
         super().__init__("Speed_Pub")	#node name
@@ -108,6 +111,9 @@ class Speed_Pub(Node):
             self.F_y = 0.0
             self.linear_vel_last = vel.linear.x
         self.pubVel.publish(vel)
+        self.F_linear_updated = False
+        self.F_obstacle_updated = False
+        self.F_sd_updated = False
         
         # self.linear_vel_last = 0.0
         # self.angular_vel_last = vel.angular.z
@@ -115,8 +121,10 @@ class Speed_Pub(Node):
     def F_obstacle_update(self, msg):
         # vel.header.stamp = self.get_clock().now().to_msg()
         if self.enable_obstacle_force == True:
-            self.F_x += msg.vector.x
-            self.F_y += msg.vector.y
+            if not self.F_obstacle_updated:
+                self.F_x += msg.vector.x
+                self.F_y += msg.vector.y
+                self.F_obstacle_updated = True
 
     def motor_speed_update(self, msg):
         self.linear_vel_last = msg.twist.twist.linear.x
@@ -124,13 +132,17 @@ class Speed_Pub(Node):
     
     def F_linear_drive_update(self, msg):
         if enable_linear_force == True:
-            self.F_x += msg.vector.x 
-            self.F_y += msg.vector.y 
+            if not self.F_linear_updated:
+                self.F_x += msg.vector.x 
+                self.F_y += msg.vector.y 
+                self.F_linear_updated = True
 
     def F_spring_damper_update(self, msg):
         self.enable_obstacle_force = True
-        self.F_x += msg.vector.x 
-        self.F_y += msg.vector.y 
+        if not self.F_sd_updated:
+            self.F_x += msg.vector.x 
+            self.F_y += msg.vector.y 
+            self.F_sd_updated = True
 
     def enable_obstacle_force_update(self, msg):
         self.enable_obstacle_force = msg.data

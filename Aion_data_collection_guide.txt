@@ -8,5 +8,5 @@ mkdir 04_10_2023
 cd 04_10_2023
 
 # recode data
-ros2 bag record Localization/Odom Localization/GPS /Roboclaw/Odom /Teensy/GPS /Teensy/IMU /ReachM2/GPS /camera/depth/image_rect_raw /ra_camera /scan -b 1000000000
+ros2 bag record Localization/Odom Localization/GPS /Roboclaw/Odom /Teensy/GPS /Teensy/IMU /ReachM2/GPS /camera/aligned_depth_to_color/image_raw /ra_camera /scan -b 1000000000
 

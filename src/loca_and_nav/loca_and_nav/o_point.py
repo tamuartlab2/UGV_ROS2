@@ -4,16 +4,16 @@ from haversine import Unit
 # original point of the global coordinate, this should be identical for all robots and should be close to the start point of the robot (within 500 m)
 class O_Point():
     # Farm
-    # lat_0 = 30.537253708625634
-    # lon_0 = -96.42643216988164
+    lat_0 = 30.537253708625634
+    lon_0 = -96.42643216988164
 
     # TAMU CS
     # lat_0 = 30.6126599
     # lon_0 = -96.3431303
 
     # ART Lab
-    lat_0 = 30.617017659079263
-    lon_0 = -96.34105620732312
+    # lat_0 = 30.617017659079263
+    # lon_0 = -96.34105620732312
     
     # Unity simulation
     # lat_0 = 30.62277

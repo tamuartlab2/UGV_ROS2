@@ -24,9 +24,9 @@ lidar_scan_subscript_topic = 'scan'
 depth_subscript_topic = "camera/aligned_depth_to_color/image_raw"
 parameter_subscript_topic = 'loca_and_nav/parameters'
 scout_lidar_topic = 'scout_lidar_check'
-enable_camera = True
+enable_camera = False
 enable_plant_scout_check = True
-publish_rate = 2.5		#Hz
+publish_rate = 5		#Hz
 K_e_default = 0.8              #K_e = k * rou * q'
 lidar_effective_distance_default = 2.5        #m
 camera_effective_distance_default = 2.5         #m
@@ -37,6 +37,7 @@ lidar_position_x = 0.09     #m
 lidar_position_y = 0.0     #m
 obstacle_point_num = 100
 decay_constant = 2.0
+front_angle_half = 10.0 * np.pi / 180.0
 
 #plant lidar check parameter
 check_distance = 3.0       #m
@@ -78,6 +79,7 @@ class Obstacle_Force(Node):
     obstacle_distance_array = np.full((obstacle_point_num, 1), np.inf)       #it is a np.array
     obstacle_distance_cam_array = np.full((obstacle_point_num, 1), np.inf)
     K_e = K_e_default
+    K_e_small = K_e*0.1
     lidar_effective_distance = lidar_effective_distance_default
     camera_effective_distance = camera_effective_distance_default
     left_status_last = True
@@ -112,9 +114,12 @@ class Obstacle_Force(Node):
             F_x = 0.0
             F_y = 0.0
             for i in range(obstacle_point_num):
-                F = - self.K_e * obstacle_point_resolution / (self.obstacle_distance_array[i])**2
-                F = F[0]     # convert 1x1 numpy array to single value
                 angle = i * obstacle_point_resolution + self.angle_min
+                if angle > -front_angle_half and angle < front_angle_half:
+                    F = - self.K_e * obstacle_point_resolution / (self.obstacle_distance_array[i])**2
+                else:
+                    F = - self.K_e_small * obstacle_point_resolution / (self.obstacle_distance_array[i])**2
+                F = F[0]     # convert 1x1 numpy array to single value
                 F_x += F * np.cos(angle)
                 F_y += F * np.sin(angle)
             Force.vector.x = F_x

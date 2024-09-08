@@ -7,15 +7,15 @@ from nav_msgs.msg import Odometry
 import rosbag2_py
 import datetime
 
-imu_topic = 'Teensy/IMU'
-gps1_topic = 'Teensy/GPS'
-gps2_topic = 'ReachM2/GPS'
-loca_odom_topic = 'Localization/Odom'
-loca_gps_topic = 'Localization/GPS'
-roboclaw_odom_topic = 'Roboclaw/Odom'
-cam_rgb_topic = 'ra_camera'
-cam_depth_topic = 'camera/aligned_depth_to_color/image_raw'
-lidar_topic = 'scan'
+imu_topic = '/Teensy/IMU'
+gps1_topic = '/Teensy/GPS'
+gps2_topic = '/ReachM2/GPS'
+loca_odom_topic = '/Localization/Odom'
+loca_gps_topic = '/Localization/GPS'
+roboclaw_odom_topic = '/Roboclaw/Odom'
+cam_rgb_topic = '/ra_camera'
+cam_depth_topic = '/camera/aligned_depth_to_color/image_raw'
+lidar_topic = '/scan'
 
 date_now = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
@@ -25,7 +25,8 @@ class BagRecorder(Node):
         self.writer = rosbag2_py.SequentialWriter()
 
         storage_options = rosbag2_py._storage.StorageOptions(
-            uri='/media/artlab/Samsung_USB/DataCollection/'+date_now,
+            # uri='/media/artlab/Samsung_USB/DataCollection/'+date_now,
+            uri='/home/artlab/Document/DataCollection/'+date_now,
             storage_id='sqlite3')
         converter_options = rosbag2_py._storage.ConverterOptions('', '')
         self.writer.open(storage_options, converter_options)

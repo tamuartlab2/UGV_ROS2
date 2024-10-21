@@ -15,7 +15,7 @@ angle_subscript_topic = 'Localization/Odom'
 position_subscript_topic = 'Localization/GPS'
 spring_damper_enabled_topic = 'force/spring_damper_enabled'
 
-publish_rate = 2.5		#Hz
+publish_rate = 5		#Hz
 dt = 1/publish_rate
 
 SD_connection_number = 3

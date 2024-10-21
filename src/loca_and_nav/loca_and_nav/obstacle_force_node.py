@@ -2,7 +2,7 @@ import rclpy
 import math
 import numpy as np
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, Vector3Stamped 
+from geometry_msgs.msg import Twist, Vector3Stamped, Point 
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, Image
 from std_msgs.msg import Float64MultiArray, UInt8MultiArray
@@ -24,6 +24,7 @@ lidar_scan_subscript_topic = 'scan'
 depth_subscript_topic = "camera/aligned_depth_to_color/image_raw"
 parameter_subscript_topic = 'loca_and_nav/parameters'
 scout_lidar_topic = 'scout_lidar_check'
+lidar_occupancy_topic = 'scout_lidar_occupancy'
 enable_camera = False
 enable_plant_scout_check = True
 publish_rate = 5		#Hz
@@ -40,7 +41,7 @@ decay_constant = 2.0
 front_angle_half = 10.0 * np.pi / 180.0
 
 #plant lidar check parameter
-check_distance = 3.0       #m
+check_distance = 2.0       #m
 check_angle_range = 20.0 * np.pi / 180.0
 left_angle_min = 0.5 * (np.pi - check_angle_range)
 left_angle_max = 0.5 * (np.pi + check_angle_range)
@@ -75,11 +76,12 @@ class Obstacle_Force(Node):
     depth_camera_flag = False
     # F_x_cam = 0.0
     # F_y_cam = 0.0
+    lidar_data = LaserScan()
     angle_min = 0.0
     obstacle_distance_array = np.full((obstacle_point_num, 1), np.inf)       #it is a np.array
     obstacle_distance_cam_array = np.full((obstacle_point_num, 1), np.inf)
     K_e = K_e_default
-    K_e_small = K_e*0.1
+    K_e_small = K_e*0.2
     lidar_effective_distance = lidar_effective_distance_default
     camera_effective_distance = camera_effective_distance_default
     left_status_last = True
@@ -90,6 +92,7 @@ class Obstacle_Force(Node):
 
         self.pub_F = self.create_publisher(Vector3Stamped, F_obstacle_pub_topic, 10)
         self.scout_lidar_pub = self.create_publisher(UInt8MultiArray, scout_lidar_topic, 10)
+        self.lidar_occupancy_pub = self.create_publisher(Point, lidar_occupancy_topic, 10)
 
         self.lidar_scan_subscription = self.create_subscription(LaserScan, lidar_scan_subscript_topic, self.F_lidar_obstacle, 10)
         self.depth_cam_subscription = self.create_subscription(Image, depth_subscript_topic, self.depth_reading, 10)
@@ -111,6 +114,7 @@ class Obstacle_Force(Node):
                         self.obstacle_distance_array[i] = decay_distance
         if self.lidar_flag == True:
             self.lidar_flag = False
+            self.cal_lidar(self.lidar_data)
             F_x = 0.0
             F_y = 0.0
             for i in range(obstacle_point_num):
@@ -125,13 +129,11 @@ class Obstacle_Force(Node):
             Force.vector.x = F_x
             Force.vector.y = F_y
             self.pub_F.publish(Force)
+            
 
         self.obstacle_distance_array = np.full((obstacle_point_num, 1), np.inf)
 
-
-    # Update lidar data to obstacle array
-    def F_lidar_obstacle(self, msg):
-        self.lidar_flag = True
+    def cal_lidar(self, msg):
         self.angle_min = msg.angle_min
         angle = msg.angle_min
         len_count = len(msg.ranges)
@@ -170,15 +172,16 @@ class Obstacle_Force(Node):
 
         if enable_plant_scout_check:
             pub_msg = UInt8MultiArray()
+            occupancy_msg = Point()
             pub_msg.data = [0, 0, 0, 0]
             if left_count == 0:
-                left_ocupancy = 0
+                left_ocupancy = 0.0
             else:
-                left_ocupancy = left_p_count / left_count
+                left_ocupancy = float(left_p_count) / left_count
             if right_count == 0:
-                right_ocupancy = 0
+                right_ocupancy = 0.0
             else:
-                right_ocupancy = right_p_count / right_count
+                right_ocupancy = float(right_p_count) / right_count
             # data[1] is left, tiggered on high to low
             if self.left_status_last == False and left_ocupancy > high_threshold:
                 self.left_status_last = True
@@ -206,6 +209,89 @@ class Obstacle_Force(Node):
             else:
                 pub_msg.data[0] = 1
             self.scout_lidar_pub.publish(pub_msg)
+            occupancy_msg.x = left_ocupancy
+            occupancy_msg.y = right_ocupancy
+            self.lidar_occupancy_pub.publish(occupancy_msg)
+
+    # Update lidar data to obstacle array
+    def F_lidar_obstacle(self, msg):
+        self.lidar_flag = True
+        self.lidar_data = msg
+
+        # self.angle_min = msg.angle_min
+        # angle = msg.angle_min
+        # len_count = len(msg.ranges)
+
+        # count = 0
+        # left_p_count = 0
+        # left_count = 0
+        # right_p_count = 0
+        # right_count = 0
+
+        # while count < len_count:
+        #     if msg.ranges[count] < self.lidar_effective_distance:      # msg.ranges[count] is the distance
+        #         if msg.ranges[count] > self.find_boundary_distance(vehcle_width, vehcle_length, lidar_position_x, lidar_position_y, angle):
+        #             # F = -K_e * msg.angle_increment / msg.ranges[count]
+        #             # self.F_x_lidar += F * np.cos(angle)
+        #             # self.F_y_lidar += F * np.sin(angle)
+        #             angle_num = np.divmod(angle - self.angle_min, obstacle_point_resolution)
+        #             # print(angle_num)
+        #             if int(angle_num[0]) < obstacle_point_num:
+        #                 if msg.ranges[count] < self.obstacle_distance_array[int(angle_num[0])]:
+        #                     self.obstacle_distance_array[int(angle_num[0])] = msg.ranges[count]
+                    
+        #             if enable_plant_scout_check == True:
+        #                 check_angle = self.wrapToPi(angle)
+        #                 if check_angle > left_angle_min and check_angle < left_angle_max:
+        #                     left_count += 1
+        #                     if  msg.ranges[count] < check_distance:
+        #                         left_p_count += 1
+        #                 if check_angle > right_angle_min and check_angle < right_angle_max:
+        #                     right_count += 1
+        #                     if  msg.ranges[count] < check_distance:
+        #                         right_p_count += 1
+
+        #     angle += msg.angle_increment
+        #     count += 1
+
+        # if enable_plant_scout_check:
+        #     pub_msg = UInt8MultiArray()
+        #     pub_msg.data = [0, 0, 0, 0]
+        #     if left_count == 0:
+        #         left_ocupancy = 0
+        #     else:
+        #         left_ocupancy = left_p_count / left_count
+        #     if right_count == 0:
+        #         right_ocupancy = 0
+        #     else:
+        #         right_ocupancy = right_p_count / right_count
+        #     # data[1] is left, tiggered on high to low
+        #     if self.left_status_last == False and left_ocupancy > high_threshold:
+        #         self.left_status_last = True
+        #         pub_msg.data[1] = 0
+        #     elif self.left_status_last == True and left_ocupancy < low_threshold:
+        #         self.left_status_last = False
+        #         pub_msg.data[1] = 1
+        #     else:
+        #         pub_msg.data[1] = 0
+
+        #     # data[2] is right, tiggered on high to low
+        #     if self.right_status_last == False and right_ocupancy > high_threshold:
+        #         right_status = True
+        #         self.right_status_last = right_status
+        #         pub_msg.data[2] = 0
+        #     elif self.right_status_last == True and right_ocupancy < low_threshold:
+        #         right_status = False
+        #         self.right_status_last = right_status
+        #         pub_msg.data[2] = 1
+        #     else:
+        #         pub_msg.data[2] = 0
+            
+        #     if left_ocupancy < low_threshold and right_ocupancy < low_threshold:
+        #         pub_msg.data[0] = 0
+        #     else:
+        #         pub_msg.data[0] = 1
+        #     self.scout_lidar_pub.publish(pub_msg)
     
     # Update depth camera data to obstacle array
     def depth_reading(self, msg):

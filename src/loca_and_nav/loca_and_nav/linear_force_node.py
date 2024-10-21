@@ -5,7 +5,7 @@ from geometry_msgs.msg import Twist, Vector3Stamped
 from nav_msgs.msg import Odometry
 import math
 # from std_msgs.msg import String, Bool, Float64, Int8
-from std_msgs.msg import Float64MultiArray, Bool, UInt8MultiArray
+from std_msgs.msg import Float64MultiArray, Bool, UInt8MultiArray, Int32
 from sensor_msgs.msg import NavSatFix, Imu
 # from sensor_msgs.msg import LaserScan
 # import tf_transformations
@@ -27,6 +27,7 @@ enable_obstacle_force_topic = 'force/enable_obstacle_force'
 parameter_subscript_topic = 'loca_and_nav/parameters'
 reach_goal_topic = 'loca_and_nav/reach_goal'
 scout_lidar_topic = 'scout_lidar_check'
+row_count_topic = 'row_num'
 # lidar_scan_subscript_topic = 'scan'
 publish_rate = 5		#Hz
 # F_linear_fix = 0.8
@@ -100,6 +101,7 @@ class Linear_force(Node):
         self.pubF = self.create_publisher(Vector3Stamped, F_linear_drive_pub_topic, 10)
         self.pub_enable_obstacle_force = self.create_publisher(Bool, enable_obstacle_force_topic, 10)
         self.pub_reach_goal = self.create_publisher(Bool, reach_goal_topic, 10)
+        self.pub_row_count = self.create_publisher(Int32, row_count_topic, 10)
 
         self.angle_subscription = self.create_subscription(Odometry, angle_subscript_topic, self.angle_update, 10)
         self.postion_subscription = self.create_subscription(NavSatFix, position_subscript_topic, self.postion_update, 10)
@@ -118,6 +120,10 @@ class Linear_force(Node):
         self.enable_obstacle_force.data = False
 
     def F_pub(self):
+        # rc = Int32()
+        # rc.data = self.row_count
+        # self.pub_row_count.publish(rc)
+
         if self.goal_point_flag == True and self.localization_fix == True:
             self.enable_obstacle_force.data = True
             self.pub_enable_obstacle_force.publish(self.enable_obstacle_force)
@@ -143,6 +149,10 @@ class Linear_force(Node):
                 self.pubF.publish(F)
                 self.localization_fix = False
                 if self.row_number == self.row_count:
+                    rc = Int32()
+                    rc.data = self.row_count
+                    self.pub_row_count.publish(rc)
+
                     self.scout_turn_path = 0
                     self.AUTO_MODE = 0
                     print("Finish scouting!")
@@ -241,6 +251,9 @@ class Linear_force(Node):
                             self.scout_turn_path = 2
                             self.P_turn = P
                             print("Turning!")
+                            rc = Int32()
+                            rc.data = self.row_count
+                            self.pub_row_count.publish(rc)
                 else:
                     P0 = np.array([(self.lon_c1 - lon_0)* lon_to_m, (self.lat_c1 - lat_0)* lat_to_m])
                     P1 = np.array([(self.lon_c0 - lon_0)* lon_to_m, (self.lat_c0 - lat_0)* lat_to_m])
@@ -256,6 +269,10 @@ class Linear_force(Node):
                             self.scout_turn_path = 2
                             self.P_turn = P
                             print("Turning!")
+                            rc = Int32()
+                            rc.data = self.row_count
+                            if self.row_number != self.row_count:
+                                self.pub_row_count.publish(rc)
             elif self.scout_turn_path == 2:
                 P0 = self.P_turn
                 P1 = self.P_turn + np.array([self.row_width * np.cos(self.change_row_orientation), self.row_width * np.sin(self.change_row_orientation)])
@@ -265,6 +282,7 @@ class Linear_force(Node):
                 else:       # Enter next row
                     self.scout_turn_path = 1
                     print("Enter next row!")
+                    
     
     def goal_update(self, msg):
         if self.AUTO_MODE == 0:

@@ -8,20 +8,25 @@ sudo apt install nano
 
 sudo apt install net-tools
 
-sudo apt install ros-humble-rmw-cyclonedds-cpp
-
-sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
-
 pip3 install roslibpy
 
 sudo apt install ros-humble-rosbridge-server
 
-sudo apt install ros-humble-slam-toolbox
-
 pip3 install haversine
 
-localization (Optional):
+roboclaw:
 
+pip3 install pyserial
+
+sudo apt install ros-humble-tf-transformations
+
+pip3 install transforms3d
+
+
+
+(Optional):
+
+Localization:
 sudo apt install ros-humble-diagnostic-updater
 
 sudo apt install ros-humble-geographic-msgs
@@ -32,12 +37,14 @@ sudo apt install ros-humble-geographic-*
 
 sudo apt install libgeographic-*
 
+SLAM and Nav2:
 
-roboclaw:
+sudo apt install ros-humble-slam-toolbox
 
-pip3 install pyserial
+sudo apt install ros-humble-rmw-cyclonedds-cpp
 
-sudo apt install ros-humble-tf-transformations
+sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
 
-pip3 install transforms3d
+
+
 

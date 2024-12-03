@@ -22,6 +22,8 @@ sudo apt install ros-humble-tf-transformations
 
 pip3 install transforms3d
 
+sudo pip3 install packaging==22
+
 
 
 (Optional):
